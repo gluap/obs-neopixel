@@ -17,17 +17,11 @@ from bleak import BleakClient
 import RPi.GPIO as GPIO
 GPIO.setmode(GPIO.BCM)
 
-BUTTON_LEFT = 26
-BUTTON_CENTER = 16
-BUTTON_RIGHT = 4
+OBS_MAC = "9C:9C:1F:C4:A3:7E"
+BUTTON = 16
 
-GPIO.setup(BUTTON_LEFT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(BUTTON_CENTER, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(BUTTON_RIGHT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-
-last_left = GPIO.input(BUTTON_LEFT)
-last_center = GPIO.input(BUTTON_CENTER)
-last_right = GPIO.input(BUTTON_RIGHT)
+GPIO.setup(BUTTON, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+last_button = GPIO.input(BUTTON)
 
 ##############################
 # Prepare Neopixel
@@ -53,7 +47,7 @@ pixels = neopixel.NeoPixel(pixel_pin, num_pixels, brightness=1, auto_write=False
 # you can change these to match your device or override them from the command line
 CHARACTERISTIC_UUID = "1FE7FAF9-CE63-4236-0004-000000000002"
 ADDRESS = (
-    "9C:9C:1F:E9:FB:52"
+    OBS_MAC
     if platform.system() != "Darwin"
     else "B9EA5233-37EF-4DD6-87A8-2A875E821C46"
 )
@@ -68,7 +62,7 @@ def notification_handler(sender, data):
     print(f"sensortime: {t}, Left distance {l}, right distance {r}")
 
     if l < 100:
-       show_text_on_display(" " + str(l) + "CM", (255,0,0), l * 32 / 200)   # red
+       show_text_on_display(" " + str(l) + "CM", (255,0,0), l * 32 / 200) # red
     elif l < 150:
        show_text_on_display(str(l) + "CM", (255,255,0), l * 32 / 200) # yellow
     else:
@@ -95,38 +89,23 @@ def show_text_on_display(text, fill, length = None):
             pixels[i] = image.getpixel((x,y))
     pixels.show()
 
-def read_direction():
+def read_button():
     global display_on
 
     while True:
-        current_left = GPIO.input(BUTTON_LEFT)
-        current_center = GPIO.input(BUTTON_CENTER)
-        current_right = GPIO.input(BUTTON_RIGHT)
+        current_button = GPIO.input(BUTTON)
 
-        if last_left and not current_left:
-            print("LEFT pressed")
+        if last_button and not current_button:
+            print("BUTTON pressed")
             display_on = not display_on
             time.sleep(1)
 
-        if last_center and not current_center:
-            print("CENTER pressed")
-            display_on = not display_on
-            time.sleep(1)
-
-        if last_right and not current_right:
-            print("RIGHT pressed")
-            display_on = not display_on
-            time.sleep(1)
-
-        current_left = last_left
-        current_center = last_center
-        current_right = last_right
-
+        current_button = last_button
         time.sleep(0.1)
 
 async def main(address, char_uuid):
     # read input
-    t = Thread(target=read_direction)
+    t = Thread(target=read_button)
     t.daemon = True
     t.start()
 
@@ -164,5 +143,6 @@ def run():
 while True:
     try:
         run()
-    except:
+    except Exception as e:
+        print(str(e));
         print("ERROR. Retry");
