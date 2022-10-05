@@ -19,6 +19,7 @@ GPIO.setmode(GPIO.BCM)
 
 OBS_MAC = "9C:9C:1F:C4:A3:7E"
 BUTTON = 16
+ARRANGEMENT =  "8x32" #"32x8"
 
 GPIO.setup(BUTTON, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 last_button = GPIO.input(BUTTON)
@@ -81,11 +82,18 @@ def show_text_on_display(text, fill, length = None):
 
     for x in range(0, 32):
         for y in range(0, 8):
-            i = x * 8
-            if x % 2 == 1:
-                i += 7 - y
-            else:
-                i += y
+            if ARRANGEMENT == "8x32":
+                i = x * 8
+                if x % 2 == 1:
+                    i += 7 - y
+                else:
+                    i += y
+            elif ARRANGEMENT == "32x8":
+                i = y * 32
+                if y % 2 == 1:
+                    i += 31 - x
+                else:
+                    i += x
             pixels[i] = image.getpixel((x,y))
     pixels.show()
 
