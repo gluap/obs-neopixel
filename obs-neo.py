@@ -11,7 +11,7 @@ import neopixel
 from PIL import Image, ImageFont, ImageDraw
 
 # OBS Bluetooth
-from bleak import BleakClient
+from bleak import BleakClient, BleakScanner
 
 # setup GPIO
 import RPi.GPIO as GPIO
@@ -38,22 +38,18 @@ num_pixels = 256
 # The order of the pixel colors - RGB or GRB. Some NeoPixels have red and green reversed!
 # For RGBW NeoPixels, simply change the ORDER to RGBW or GRBW.
 ORDER = neopixel.GRB
-
 pixels = neopixel.NeoPixel(pixel_pin, num_pixels, brightness=1, auto_write=False, pixel_order=ORDER)
 
-##############################
-# Prepare Bluetooth
-##############################
-
-# you can change these to match your device or override them from the command line
-CHARACTERISTIC_UUID = "1FE7FAF9-CE63-4236-0004-000000000002"
-ADDRESS = (
-    OBS_MAC
-    if platform.system() != "Darwin"
-    else "B9EA5233-37EF-4DD6-87A8-2A875E821C46"
-)
-
 display_on = True
+
+#
+# Blutooth scanner config
+#
+
+timeout_seconds = 10
+obs_address = None
+
+
 
 def notification_handler(sender, data):
     global display_on
@@ -125,8 +121,6 @@ bt_connected = False
 async def connect(address, char_uuid):
     global bt_connected
 
-    show_text_on_display("OBS...", (255,255,255))   # white
-
     def disconnected_callback(client):
         global bt_connected
         print("DISCONNECTED");
@@ -141,12 +135,51 @@ async def connect(address, char_uuid):
                 break
             await asyncio.sleep(1)
 
+class MyScanner:
+    def __init__(self):
+        self._scanner = BleakScanner()
+        self._scanner.register_detection_callback(self.detection_callback)
+        self.scanning = asyncio.Event()
+
+    def detection_callback(self, device, advertisement_data):
+        global obs_address
+        if device.name.startswith("OpenBikeSensor"):
+            print(device)
+            obs_address = device.address
+            self.scanning.clear()
+
+    async def run(self):
+        global obs_address
+        print("Scan for devices")
+        show_text_on_display("OBS...", (255,255,255))   # white
+        obs_address = None
+        await self._scanner.start()
+        self.scanning.set()
+        end_time = loop.time() + timeout_seconds
+        while self.scanning.is_set():
+            if loop.time() > end_time:
+                self.scanning.clear()
+                print('Scan has timed out so we terminate')
+            await asyncio.sleep(0.1)
+        await self._scanner.stop()
+        if obs_address == None:
+            raise Exception('No OBS found')
+
+my_scanner = MyScanner()
+loop = asyncio.get_event_loop()
+
 def run():
+    loop.run_until_complete(my_scanner.run())
+
+    CHARACTERISTIC_UUID = "1FE7FAF9-CE63-4236-0004-000000000002"
+    ADDRESS = (
+        obs_address
+#        if platform.system() != "Darwin"
+#        else "B9EA5233-37EF-4DD6-87A8-2A875E821C46"
+    )
+
     asyncio.run(
-        main(
-            sys.argv[1] if len(sys.argv) > 1 else ADDRESS,
-            sys.argv[2] if len(sys.argv) > 2 else CHARACTERISTIC_UUID,
-        )
+        main(ADDRESS, CHARACTERISTIC_UUID)
     )
 
 while True:
