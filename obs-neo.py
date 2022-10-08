@@ -17,7 +17,7 @@ from bleak import BleakClient
 import RPi.GPIO as GPIO
 GPIO.setmode(GPIO.BCM)
 
-OBS_MAC = "9C:9C:1F:C4:A3:7E"
+OBS_MAC = "40:91:51:9B:6E:22"
 BUTTON = 16
 ARRANGEMENT =  "8x32" #"32x8"
 
@@ -61,8 +61,9 @@ def notification_handler(sender, data):
     """Simple notification handler which prints the data received."""
     t,l,r=struct.unpack("Ihh",data)
     print(f"sensortime: {t}, Left distance {l}, right distance {r}")
-
-    if l < 100:
+    if l == -1:
+       show_text_on_display("___CM", (255,255,255)) # white
+    elif l < 100:
        show_text_on_display(" " + str(l) + "CM", (255,0,0), l * 32 / 200) # red
     elif l < 150:
        show_text_on_display(str(l) + "CM", (255,255,0), l * 32 / 200) # yellow
