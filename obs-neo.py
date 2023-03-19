@@ -18,8 +18,13 @@ import RPi.GPIO as GPIO
 GPIO.setmode(GPIO.BCM)
 
 OBS_MAC = "40:91:51:9B:6E:22"
-BUTTON = 16
+HANDLEBAR_OFFSET_UUID = "1FE7FAF9-CE63-4236-0004-000000000004"
+
+
+BUTTON = 17
 ARRANGEMENT =  "8x32" #"32x8"
+
+handlebar_left = 30;
 
 GPIO.setup(BUTTON, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 last_button = GPIO.input(BUTTON)
@@ -46,19 +51,25 @@ display_on = True
 # Blutooth scanner config
 #
 
-timeout_seconds = 10
+timeout_seconds = 20
 obs_address = None
 
-
+i=0
 
 def notification_handler(sender, data):
-    global display_on
+    global display_on,i,handlebar_left
+    i+=1
+    if i%2:
+        return
 
     """Simple notification handler which prints the data received."""
     t,l,r=struct.unpack("Ihh",data)
+    l-=handlebar_left
     print(f"sensortime: {t}, Left distance {l}, right distance {r}")
     if l == -1:
        show_text_on_display("___CM", (255,255,255)) # white
+    elif l < 0:
+       show_text_on_display("XXXXX", (255,0,0),0)
     elif l < 100:
        show_text_on_display(" " + str(l) + "CM", (255,0,0), l * 32 / 200) # red
     elif l < 150:
@@ -81,7 +92,7 @@ def show_text_on_display(text, fill, length = None):
         for y in range(0, 8):
             if ARRANGEMENT == "8x32":
                 i = x * 8
-                if x % 2 == 1:
+                if x % 2 == 0:
                     i += 7 - y
                 else:
                     i += y
@@ -91,7 +102,7 @@ def show_text_on_display(text, fill, length = None):
                     i += 31 - x
                 else:
                     i += x
-            pixels[i] = image.getpixel((x,y))
+            pixels[255-i] = image.getpixel((x,y))
     pixels.show()
 
 def read_button():
@@ -106,7 +117,7 @@ def read_button():
             time.sleep(1)
 
         current_button = last_button
-        time.sleep(0.1)
+        time.sleep(0.2)
 
 async def main(address, char_uuid):
     # read input
@@ -119,7 +130,7 @@ async def main(address, char_uuid):
 bt_connected = False
 
 async def connect(address, char_uuid):
-    global bt_connected
+    global bt_connected, handlebar_left
 
     def disconnected_callback(client):
         global bt_connected
@@ -127,13 +138,17 @@ async def connect(address, char_uuid):
         bt_connected = False
 
     async with BleakClient(address, disconnected_callback=disconnected_callback) as client:
+        global handlebar_left
         print(f"Connected: {client.is_connected}")
         await client.start_notify(char_uuid, notification_handler)
+        handlebar = await client.read_gatt_char(HANDLEBAR_OFFSET_UUID)
+        handlebar_left, trash = struct.unpack("hh", handlebar)
+        print(f"handlebar_left: {handlebar_left}")
         bt_connected = True
         while True:
             if not bt_connected:
                 break
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.5)
 
 class MyScanner:
     def __init__(self):
