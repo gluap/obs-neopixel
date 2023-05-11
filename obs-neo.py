@@ -10,6 +10,9 @@ import board
 import neopixel
 from PIL import Image, ImageFont, ImageDraw
 
+from collections import deque
+from statistics import median
+
 # OBS Bluetooth
 from bleak import BleakClient, BleakScanner
 
@@ -21,7 +24,7 @@ OBS_MAC = "40:91:51:9B:6E:22"
 HANDLEBAR_OFFSET_UUID = "1FE7FAF9-CE63-4236-0004-000000000004"
 
 
-BUTTON = 17
+BUTTON = 16
 ARRANGEMENT =  "8x32" #"32x8"
 
 handlebar_left = 30;
@@ -55,18 +58,20 @@ timeout_seconds = 20
 obs_address = None
 
 i=0
+last = deque(maxlen=3)
 
 def notification_handler(sender, data):
     global display_on,i,handlebar_left
-    i+=1
-    if i%2:
-        return
+
 
     """Simple notification handler which prints the data received."""
-    t,l,r=struct.unpack("Ihh",data)
+    t,lraw,r=struct.unpack("Ihh",data)
+
+    last.append(lraw)
+    l=median(last)
     l-=handlebar_left
     print(f"sensortime: {t}, Left distance {l}, right distance {r}")
-    if l == -1:
+    if l == -1-handlebar_left:
        show_text_on_display("___CM", (255,255,255)) # white
     elif l < 0:
        show_text_on_display("XXXXX", (255,0,0),0)
